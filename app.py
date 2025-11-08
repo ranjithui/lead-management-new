@@ -115,25 +115,24 @@ with tabs[2]:
 with tabs[3]:
     st.header("⚙️ Admin — Manage Teams & Members")
 
-    # --- Split layout ---
+    # --------------------------------------------------
+    # CREATE / DELETE TEAM
+    # --------------------------------------------------
     col1, col2 = st.columns(2)
 
-    # --------------------------------------------------
-    # CREATE TEAM
-    # --------------------------------------------------
+    # --- Create Team ---
     with col1:
         st.subheader("➕ Create New Team")
         team_name = st.text_input("Team Name", key="create_team_name")
         if st.button("Add Team"):
             if not team_name.strip():
-                st.error("Please enter a team name.")
+                st.error("Please enter a valid team name.")
             else:
                 supabase.table("teams").insert({"team_name": team_name.strip()}).execute()
                 st.success(f"✅ Team '{team_name}' created successfully!")
+                st.experimental_rerun()
 
-    # --------------------------------------------------
-    # DELETE TEAM
-    # --------------------------------------------------
+    # --- Delete Team ---
     with col2:
         st.subheader("🗑️ Delete Team")
         teams_data = supabase.table("teams").select("*").execute().data or []
@@ -145,14 +144,10 @@ with tabs[3]:
 
             if st.button("Delete Selected Team"):
                 team_id = next(t["id"] for t in teams_data if t["team_name"] == team_to_delete)
-
-                # Optional: delete all members in that team first
                 supabase.table("team_members").delete().eq("team_id", team_id).execute()
-
-                # Delete the team itself
                 supabase.table("teams").delete().eq("id", team_id).execute()
-
                 st.success(f"🗑️ Team '{team_to_delete}' and its members were deleted successfully!")
+                st.experimental_rerun()
 
     st.divider()
 
@@ -166,35 +161,38 @@ with tabs[3]:
         st.info("No teams available. Please create one first.")
     else:
         team_map = {t["team_name"]: t["id"] for t in teams_data}
-        col_a, col_b, col_c, col_d = st.columns(4)
+        col_a, col_b, col_c = st.columns(3)
         with col_a:
-            name = st.text_input("Member Name", key="member_name")
+            member_name = st.text_input("Member Name", key="member_name")
         with col_b:
-            email = st.text_input("Member Email", key="member_email")
+            member_email = st.text_input("Email", key="member_email")
         with col_c:
             team_choice = st.selectbox("Team", list(team_map.keys()), key="member_team")
+
+        col_d, col_e = st.columns(2)
         with col_d:
             weekly_target = st.number_input("Weekly Target", min_value=0, value=0, key="member_weekly_target")
-
-        monthly_target = st.number_input("Monthly Target", min_value=0, value=0, key="member_monthly_target")
+        with col_e:
+            monthly_target = st.number_input("Monthly Target", min_value=0, value=0, key="member_monthly_target")
 
         if st.button("Add Member"):
-            if not name.strip():
+            if not member_name.strip():
                 st.error("Please enter member name.")
             else:
                 supabase.table("team_members").insert({
-                    "name": name.strip(),
-                    "email": email.strip(),
+                    "name": member_name.strip(),
+                    "email": member_email.strip(),
                     "team_id": team_map[team_choice],
                     "weekly_target": weekly_target,
                     "monthly_target": monthly_target
                 }).execute()
-                st.success(f"✅ Member '{name}' added to team '{team_choice}' successfully!")
+                st.success(f"✅ Member '{member_name}' added to '{team_choice}' successfully!")
+                st.experimental_rerun()
 
     st.divider()
 
     # --------------------------------------------------
-    # TEAM OVERVIEW
+    # TEAM OVERVIEW (TABLE FORMAT)
     # --------------------------------------------------
     st.subheader("📋 Team Overview")
 
@@ -204,29 +202,79 @@ with tabs[3]:
     if not teams_data:
         st.info("No teams available yet.")
     else:
+        rows = []
         for team in teams_data:
-            st.markdown(f"### 🧩 {team['team_name']}")
             team_members = [m for m in members_data if m.get("team_id") == team["id"]]
-            if not team_members:
-                st.write("_No members in this team yet._")
-            else:
+            if team_members:
                 for m in team_members:
-                    st.write(
-                        f"- **{m['name']}** ({m.get('email', '-')}) | "
-                        f"Weekly Target: {m.get('weekly_target', 0)}, "
-                        f"Monthly Target: {m.get('monthly_target', 0)}"
-                    )
+                    rows.append({
+                        "Team Name": team["team_name"],
+                        "Member Name": m["name"],
+                        "Email": m.get("email", "-"),
+                        "Weekly Target": m.get("weekly_target", 0),
+                        "Monthly Target": m.get("monthly_target", 0),
+                    })
+            else:
+                rows.append({
+                    "Team Name": team["team_name"],
+                    "Member Name": "-",
+                    "Email": "-",
+                    "Weekly Target": "-",
+                    "Monthly Target": "-",
+                })
+
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
     st.divider()
 
     # --------------------------------------------------
-    # EDIT / REASSIGN / DELETE MEMBER
+    # REASSIGN MEMBER TO ANOTHER TEAM (TOGGLE)
     # --------------------------------------------------
-    st.subheader("🛠️ Edit / Reassign / Delete Member")
+    reassign_toggle = st.checkbox("🔁 Reassign Member to Another Team")
+
+    if reassign_toggle:
+        members_data = supabase.table("team_members").select("*").execute().data or []
+        teams_data = supabase.table("teams").select("*").execute().data or []
+
+        if not members_data:
+            st.info("No members found.")
+        elif not teams_data:
+            st.warning("No teams available for reassignment.")
+        else:
+            member_map = {m["name"]: m for m in members_data}
+            team_map = {t["team_name"]: t["id"] for t in teams_data}
+
+            col_m, col_t = st.columns(2)
+            with col_m:
+                member_choice = st.selectbox("Select Member", list(member_map.keys()), key="reassign_member")
+            with col_t:
+                team_choice = st.selectbox("Select New Team", list(team_map.keys()), key="reassign_team")
+
+            # Show current team info
+            selected_member = member_map[member_choice]
+            current_team_id = selected_member["team_id"]
+            current_team = next((t["team_name"] for t in teams_data if t["id"] == current_team_id), "Unknown")
+
+            st.write(f"👀 **Current Team:** {current_team}")
+
+            if st.button("Confirm Reassignment"):
+                new_team_id = team_map[team_choice]
+                if new_team_id == current_team_id:
+                    st.warning("⚠️ Member is already in this team.")
+                else:
+                    supabase.table("team_members").update({"team_id": new_team_id}).eq("id", selected_member["id"]).execute()
+                    st.success(f"✅ Member '{member_choice}' reassigned from '{current_team}' to '{team_choice}'.")
+                    st.experimental_rerun()
+
+    st.divider()
+
+    # --------------------------------------------------
+    # EDIT / DELETE MEMBER
+    # --------------------------------------------------
+    st.subheader("🛠️ Edit or Delete Member")
 
     members_data = supabase.table("team_members").select("*").execute().data or []
-    teams_data = supabase.table("teams").select("*").execute().data or []
-
     if not members_data:
         st.info("No team members found.")
     else:
@@ -234,16 +282,10 @@ with tabs[3]:
         member_choice = st.selectbox("Select Member", members_df["name"].tolist(), key="edit_member_select")
         selected_member = members_df[members_df["name"] == member_choice].iloc[0]
 
-        # Editable fields
         new_name = st.text_input("Edit Name", value=selected_member["name"], key="edit_member_name")
         new_email = st.text_input("Edit Email", value=selected_member.get("email", ""), key="edit_member_email")
         new_weekly = st.number_input("Edit Weekly Target", min_value=0, value=int(selected_member["weekly_target"]), key="edit_member_weekly")
         new_monthly = st.number_input("Edit Monthly Target", min_value=0, value=int(selected_member["monthly_target"]), key="edit_member_monthly")
-
-        # Reassign to another team
-        team_map = {t["team_name"]: t["id"] for t in teams_data}
-        current_team = next((t["team_name"] for t in teams_data if t["id"] == selected_member["team_id"]), None)
-        new_team = st.selectbox("Reassign to Team", list(team_map.keys()), index=list(team_map.keys()).index(current_team) if current_team in team_map else 0, key="edit_member_team")
 
         col_save, col_delete = st.columns(2)
 
@@ -253,12 +295,13 @@ with tabs[3]:
                     "name": new_name.strip(),
                     "email": new_email.strip(),
                     "weekly_target": new_weekly,
-                    "monthly_target": new_monthly,
-                    "team_id": team_map[new_team]
+                    "monthly_target": new_monthly
                 }).eq("id", selected_member["id"]).execute()
                 st.success(f"✅ Member '{new_name}' updated successfully!")
+                st.experimental_rerun()
 
         with col_delete:
             if st.button("🗑️ Delete Member"):
                 supabase.table("team_members").delete().eq("id", selected_member["id"]).execute()
                 st.success(f"❌ Member '{selected_member['name']}' deleted successfully!")
+                st.experimental_rerun()
