@@ -110,7 +110,7 @@ with tabs[2]:
 
 # ---------------- ADMIN ----------------
 # --------------------------------------------------
-# 4️⃣ ADMIN TAB — CLEAN UI LAYOUT
+# 4️⃣ ADMIN TAB — CLEAN UI LAYOUT (UPDATED FOR st.rerun)
 # --------------------------------------------------
 with tabs[3]:
     st.header("⚙️ Admin — Manage Teams & Members")
@@ -132,7 +132,7 @@ with tabs[3]:
             else:
                 supabase.table("teams").insert({"team_name": team_name.strip()}).execute()
                 st.success(f"✅ Team '{team_name}' created successfully!")
-                st.experimental_rerun()
+                st.rerun()
 
         st.divider()
 
@@ -149,7 +149,7 @@ with tabs[3]:
                 supabase.table("team_members").delete().eq("team_id", team_id).execute()
                 supabase.table("teams").delete().eq("id", team_id).execute()
                 st.success(f"🗑️ Team '{team_to_delete}' deleted successfully!")
-                st.experimental_rerun()
+                st.rerun()
 
     # --- Right: Add Team Member ---
     with col2:
@@ -182,7 +182,7 @@ with tabs[3]:
                         "monthly_target": monthly_target
                     }).execute()
                     st.success(f"✅ '{member_name}' added to '{team_choice}' successfully!")
-                    st.experimental_rerun()
+                    st.rerun()
 
     # --------------------------------------------------
     # 2️⃣ TEAM OVERVIEW (DIRECTLY BELOW THE SPLIT)
@@ -248,7 +248,7 @@ with tabs[3]:
                 else:
                     supabase.table("team_members").update({"team_id": new_team_id}).eq("id", selected_member["id"]).execute()
                     st.success(f"✅ '{member_choice}' moved from '{current_team}' → '{team_choice}'")
-                    st.experimental_rerun()
+                    st.rerun()
 
     # --- Edit/Delete Member ---
     with st.expander("🛠 Edit or Delete Member"):
@@ -275,10 +275,10 @@ with tabs[3]:
                         "monthly_target": new_monthly
                     }).eq("id", selected_member["id"]).execute()
                     st.success(f"✅ Member '{new_name}' updated!")
-                    st.experimental_rerun()
+                    st.rerun()
 
             with col_delete:
                 if st.button("🗑️ Delete Member"):
                     supabase.table("team_members").delete().eq("id", selected_member["id"]).execute()
                     st.success(f"❌ '{selected_member['name']}' deleted!")
-                    st.experimental_rerun()
+                    st.rerun()
