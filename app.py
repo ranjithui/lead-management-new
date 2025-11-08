@@ -192,7 +192,7 @@ with tabs[3]:
     st.divider()
 
     # --------------------------------------------------
-    # TEAM OVERVIEW (TABLE FORMAT)
+    # TEAM OVERVIEW (SEPARATE TABLES FOR EACH TEAM)
     # --------------------------------------------------
     st.subheader("📋 Team Overview")
 
@@ -202,29 +202,25 @@ with tabs[3]:
     if not teams_data:
         st.info("No teams available yet.")
     else:
-        rows = []
         for team in teams_data:
-            team_members = [m for m in members_data if m.get("team_id") == team["id"]]
-            if team_members:
-                for m in team_members:
-                    rows.append({
-                        "Team Name": team["team_name"],
-                        "Member Name": m["name"],
-                        "Email": m.get("email", "-"),
-                        "Weekly Target": m.get("weekly_target", 0),
-                        "Monthly Target": m.get("monthly_target", 0),
-                    })
-            else:
-                rows.append({
-                    "Team Name": team["team_name"],
-                    "Member Name": "-",
-                    "Email": "-",
-                    "Weekly Target": "-",
-                    "Monthly Target": "-",
-                })
+            st.markdown(f"### 🧩 {team['team_name']}")
 
-        df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+            # Get all members of this team
+            team_members = [m for m in members_data if m.get("team_id") == team["id"]]
+
+            if not team_members:
+                st.info("No members in this team yet.")
+            else:
+                team_df = pd.DataFrame(team_members)[["name", "email", "weekly_target", "monthly_target"]]
+                team_df.rename(columns={
+                    "name": "Member Name",
+                    "email": "Email",
+                    "weekly_target": "Weekly Target",
+                    "monthly_target": "Monthly Target"
+                }, inplace=True)
+                st.dataframe(team_df, use_container_width=True, hide_index=True)
+
+            st.markdown("---")  # divider between teams
 
     st.divider()
 
@@ -251,7 +247,6 @@ with tabs[3]:
             with col_t:
                 team_choice = st.selectbox("Select New Team", list(team_map.keys()), key="reassign_team")
 
-            # Show current team info
             selected_member = member_map[member_choice]
             current_team_id = selected_member["team_id"]
             current_team = next((t["team_name"] for t in teams_data if t["id"] == current_team_id), "Unknown")
